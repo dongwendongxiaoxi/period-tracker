@@ -1,0 +1,18 @@
+{
+"short_name": "HeartFlow",
+"name": "HeartFlow - 心动经期",
+"icons": [
+{
+"src": "icon.png",
+"type": "image/png",
+"sizes": "512x512",
+"purpose": "any maskable"
+}
+],
+"start_url": "./index.html",
+"background_color": "#F0F9FF",
+"display": "standalone",
+"scope": "./",
+"theme_color": "#FFD1DC",
+"description": "小清新的生理期血量记录应用"
+}

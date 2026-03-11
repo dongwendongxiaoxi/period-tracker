@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover">
+    <title>HeartFlow - 心动经期</title>
+    
+    <!-- PWA 元数据 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#FFD1DC">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/833/833472.png">
+
+    <!-- 核心库 CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+        
+        :root {
+            --safe-top: env(safe-area-inset-top);
+        }
+
+        body { 
+            font-family: 'Noto Sans SC', sans-serif; 
+            -webkit-tap-highlight-color: transparent;
+            background-color: #F0F9FF;
+            margin: 0;
+            user-select: none;
+        }
+
+        .heart-pulse:active { transform: scale(0.85); transition: transform 0.1s; }
+        
+        .pwa-header {
+            padding-top: calc(1rem + var(--safe-top, 0px));
+        }
+
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar { display: none; }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // 内联图标组件，确保加载稳定性
+        const IconHeart = ({ size = 24, fill = "none", color = "currentColor", className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+            </svg>
+        );
+
+        const IconChevron = ({ direction = "left", size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {direction === "left" ? <path d="m15 18-6-6 6-6" /> : <path d="m9 18 6-6-6-6" />}
+            </svg>
+        );
+
+        const IconTrash = ({ size = 20 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+        );
+
+        const App = () => {
+            const [currentDate, setCurrentDate] = useState(new Date());
+            const [selectedDate, setSelectedDate] = useState(new Date());
+            const [records, setRecords] = useState({});
+            const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+            useEffect(() => {
+                const saved = localStorage.getItem('heartflow_records');
+                if (saved) {
+                    try { setRecords(JSON.parse(saved)); } catch (e) { console.error(e); }
+                }
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('heartflow_records', JSON.stringify(records));
+            }, [records]);
+
+            const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+            const getFirstDayOfMonth = (y, m) => new Date(y, m, 1).getDay();
+            const dateToKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+            const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
+            const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+
+            const changeMonth = (offset) => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+            
+            const handleRecord = (count) => {
+                const key = dateToKey(selectedDate);
+                if (records[key] === count) {
+                    const newRecords = { ...records };
+                    delete newRecords[key];
+                    setRecords(newRecords);
+                } else {
+                    setRecords({ ...records, [key]: count });
+                }
+            };
+
+            const calendarDays = useMemo(() => {
+                const y = currentDate.getFullYear(), m = currentDate.getMonth();
+                const days = [];
+                for (let i = 0; i < getFirstDayOfMonth(y, m); i++) days.push({ day: null, key: `pad-${i}` });
+                for (let i = 1; i <= getDaysInMonth(y, m); i++) {
+                    const d = new Date(y, m, i);
+                    days.push({ day: i, date: d, key: dateToKey(d) });
+                }
+                return days;
+            }, [currentDate]);
+
+            const selectedKey = dateToKey(selectedDate);
+            const selectedLevel = records[selectedKey] || 0;
+
+            return (
+                <div className="min-h-screen max-w-md mx-auto flex flex-col items-center p-4 overflow-x-hidden">
+                    {/* Header */}
+                    <header className="w-full flex justify-between items-center mb-6 px-2 pwa-header">
+                        <div className="flex items-center gap-2">
+                            <div className="w-9 h-9 bg-[#FFB7C5] rounded-xl flex items-center justify-center shadow-sm">
+                                <IconHeart size={20} fill="white" color="white" />
+                            </div>
+                            <h1 className="text-2xl font-black text-[#FFB7C5] tracking-tight">HeartFlow</h1>
+                        </div>
+                        <button onClick={() => setShowClearConfirm(true)} className="p-2 text-slate-300 active:text-red-400 transition-colors">
+                            <IconTrash size={22} />
+                        </button>
+                    </header>
+
+                    {/* Calendar Card */}
+                    <main className="w-full bg-white rounded-[2.5rem] shadow-xl shadow-blue-100/50 overflow-hidden border border-blue-50/50">
+                        {/* Month Picker */}
+                        <div className="bg-[#E0F2FE] p-6 flex justify-between items-center text-blue-600">
+                            <button onClick={() => changeMonth(-1)} className="p-2 active:scale-75 transition-transform"><IconChevron direction="left" /></button>
+                            <div className="text-center">
+                                <div className="text-[10px] uppercase tracking-[0.2em] text-blue-400 font-black mb-0.5">{currentDate.getFullYear()}</div>
+                                <div className="text-xl font-bold">{monthNames[currentDate.getMonth()]}</div>
+                            </div>
+                            <button onClick={() => changeMonth(1)} className="p-2 active:scale-75 transition-transform"><IconChevron direction="right" /></button>
+                        </div>
+
+                        {/* Calendar Body */}
+                        <div className="p-5">
+                            <div className="grid grid-cols-7 mb-4 text-center text-[10px] font-black text-blue-200 uppercase tracking-widest">
+                                {weekDays.map(d => <div key={d}>{d}</div>)}
+                            </div>
+                            <div className="grid grid-cols-7 gap-y-1 gap-x-1">
+                                {calendarDays.map((item) => {
+                                    const dateKey = item.date ? dateToKey(item.date) : null;
+                                    const isSelected = item.date && dateKey === selectedKey;
+                                    const heartCount = item.date ? (records[dateKey] || 0) : 0;
+                                    const isToday = item.date && dateKey === dateToKey(new Date());
+
+                                    return (
+                                        <div key={item.key} onClick={() => item.date && setSelectedDate(item.date)}
+                                            className={`relative h-16 flex flex-col items-center justify-start pt-2 rounded-2xl cursor-pointer transition-all duration-300 
+                                            ${!item.day ? 'pointer-events-none' : 'active:scale-90'} 
+                                            ${isSelected ? 'bg-[#FFD1DC] text-white shadow-lg scale-105 z-10' : 'text-slate-600 hover:bg-blue-50/50'}`}>
+                                            
+                                            <span className={`text-sm mb-1.5 ${isSelected ? 'font-black' : 'font-semibold'}`}>{item.day}</span>
+                                            
+                                            {heartCount > 0 && (
+                                                <div className="grid grid-cols-3 gap-0.5 px-0.5">
+                                                    {[...Array(heartCount)].map((_, i) => (
+                                                        <IconHeart key={i} size={7} fill={isSelected ? "white" : "#FFB7C5"} color="none" />
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {isToday && !isSelected && (
+                                                <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-blue-400 rounded-full border border-white" />
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Recording Panel */}
+                        <div className="bg-[#FFF5F7] border-t border-pink-50 p-8 pb-12 rounded-t-[2.5rem] -mt-2">
+                            <div className="flex flex-col items-center">
+                                <div className="text-[10px] font-black text-pink-300 uppercase tracking-[0.2em] mb-6">
+                                    {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日 · 经量记录
+                                </div>
+                                <div className="flex gap-2 bg-white/60 p-3 rounded-[2rem] border border-pink-100 shadow-sm">
+                                    {[1, 2, 3, 4, 5, 6].map((num) => (
+                                        <button key={num} onClick={() => handleRecord(num)} className="heart-pulse p-1">
+                                            <IconHeart 
+                                                size={32} 
+                                                fill={num <= selectedLevel ? "#FFB7C5" : "none"} 
+                                                color={num <= selectedLevel ? "#FFB7C5" : "#FFD1DC"} 
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+
+                    <footer className="mt-8 text-slate-300 text-[10px] flex items-center gap-1.5 tracking-widest uppercase">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                        <span>私密加密 · 本地存储</span>
+                    </footer>
+
+                    {/* Modal */}
+                    {showClearConfirm && (
+                        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-8 z-50">
+                            <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-xs text-center border border-blue-50 shadow-2xl animate-in zoom-in duration-200">
+                                <h3 className="text-xl font-black text-slate-800 mb-2">清除全部？</h3>
+                                <p className="text-slate-400 text-sm mb-8 leading-relaxed">此操作不可撤销<br/>记录的心心都会消失哦</p>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowClearConfirm(false)} className="flex-1 py-4 rounded-2xl bg-slate-50 text-slate-500 font-bold active:scale-95 transition-all">取消</button>
+                                    <button onClick={() => {setRecords({}); setShowClearConfirm(false);}} className="flex-1 py-4 rounded-2xl bg-red-400 text-white font-bold shadow-lg shadow-red-100 active:scale-95 transition-all">确认</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
